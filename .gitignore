@@ -1,10 +1,6 @@
 __pycache__/
 *.pyc
 
-# mihomo geodata (tai ve khi can)
-GeoSite.dat
-geoip.metadb
-
 # runtime
 cache.db
 *.log

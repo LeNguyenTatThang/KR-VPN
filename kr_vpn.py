@@ -11,7 +11,7 @@ import urllib.parse
 import urllib.request
 from tkinter import ttk
 
-APP_DIR = r"C:\Users\lengu\kr-vpn"
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
 MIHOMO_EXE = os.path.join(APP_DIR, "mihomo-windows-amd64-compatible.exe")
 API = "http://127.0.0.1:9090"
 PROXY = "http://127.0.0.1:7890"

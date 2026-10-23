@@ -1,2 +1,3 @@
 @echo off
-start "" pythonw "C:\Users\lengu\kr-vpn\kr_vpn.py"
+cd /d "%~dp0"
+start "" pythonw "%~dp0kr_vpn.py"
