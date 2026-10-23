@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+
+# mihomo core & data (tai ve khi can)
+mihomo-windows-amd64-compatible.exe
+GeoSite.dat
+geoip.metadb
+
+# runtime
+cache.db
+*.log
