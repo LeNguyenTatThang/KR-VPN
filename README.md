@@ -76,12 +76,30 @@ Sau khi bật, mở trình duyệt (đi qua proxy `127.0.0.1:7890`) hay app bấ
 
 ---
 
+## Tạo shortcut ra Desktop
+
+### Cách 1 — dùng script có sẵn (nhanh)
+
+Bấm đúp **`Tao Shortcut.bat`** → shortcut `KR VPN` tự hiện trên Desktop với icon, trỏ đúng thư mục app (di chuyển thư mục app vẫn chạy được).
+
+### Cách 2 — tạo tay
+
+1. Chuột phải `KR-VPN.bat` → **Send to → Desktop (create shortcut)**
+2. Đổi tên shortcut thành `KR VPN`
+3. Chuột phải shortcut → **Properties → Change Icon** → chọn `kr.ico`
+
+> Không tạo shortcut trỏ thẳng vào `pythonw.exe` như trước —shortcut phải trỏ vào `KR-VPN.bat` để app chạy đúng thư mục chứa nó, copy sang máy khác vẫn chạy.
+
+---
+
 ## Cấu trúc thư mục
 
 ```
 KR-VPN/
 ├── kr_vpn.py                         # giao diện + điều khiển core (nguồn chính)
 ├── KR-VPN.bat                        # bấm đúp để chạy app
+├── Tao Shortcut.bat                  # bấm đúp để tạo shortcut Desktop
+├── tao-shortcut.ps1                  # script tạo shortcut (được bat gọi)
 ├── gen_icon.py                       # script tạo file icon kr.ico
 ├── kr.ico                            # icon ứng dụng
 ├── config.yaml                       # cấu hình mihomo + danh sách node
