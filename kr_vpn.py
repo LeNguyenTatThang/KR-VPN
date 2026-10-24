@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import ctypes
 import json
 import os
 import random
@@ -7,14 +8,26 @@ import sys
 import threading
 import time
 import tkinter as tk
+import urllib.error
 import urllib.parse
 import urllib.request
+import webbrowser
 from tkinter import ttk
+
+try:
+    import winreg
+except ImportError:
+    winreg = None
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 MIHOMO_EXE = os.path.join(APP_DIR, "mihomo-windows-amd64-compatible.exe")
 API = "http://127.0.0.1:9090"
 PROXY = "http://127.0.0.1:7890"
+SYSTEM_PROXY = "127.0.0.1:7890"
+SYSTEM_BYPASS = "localhost;127.*;10.*;172.16.*;172.17.*;172.18.*;172.19.*;172.20.*;172.21.*;172.22.*;172.23.*;172.24.*;172.25.*;172.26.*;172.27.*;172.28.*;172.29.*;172.30.*;172.31.*;192.168.*;<local>"
+SITE_URL = "https://yes.skbroadband.com/"
+PROXY_BACKUP = os.path.join(APP_DIR, ".proxy_backup.json")
+LAST_NODE = os.path.join(APP_DIR, ".last_node.txt")
 IP_URLS = [
     "https://ipinfo.io/json",
     "https://api.ip.sb/geoip",
@@ -101,6 +114,134 @@ def set_mode(mode):
 
 def select_global(name):
     api("PUT", "/proxies/GLOBAL", {"name": name})
+
+
+def _notify_proxy_change():
+    try:
+        wininet = ctypes.windll.Wininet
+        wininet.InternetSetOptionW(0, 39, 0, 0)
+        wininet.InternetSetOptionW(0, 37, 0, 0)
+    except Exception:
+        pass
+
+
+def _reg_read(key, name):
+    try:
+        return winreg.QueryValueEx(key, name)[0]
+    except FileNotFoundError:
+        return None
+    except OSError:
+        return None
+
+
+def system_proxy_on():
+    if winreg is None:
+        return False
+    try:
+        with winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\CurrentVersion\Internet Settings",
+        ) as key:
+            return bool(_reg_read(key, "ProxyEnable")) and _reg_read(key, "ProxyServer") == SYSTEM_PROXY
+    except OSError:
+        return False
+
+
+def enable_system_proxy():
+    if winreg is None:
+        return False
+    path = r"Software\Microsoft\Windows\CurrentVersion\Internet Settings"
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, path) as key:
+            old = {
+                "ProxyEnable": _reg_read(key, "ProxyEnable"),
+                "ProxyServer": _reg_read(key, "ProxyServer"),
+                "ProxyOverride": _reg_read(key, "ProxyOverride"),
+                "AutoConfigURL": _reg_read(key, "AutoConfigURL"),
+            }
+        if not os.path.exists(PROXY_BACKUP):
+            with open(PROXY_BACKUP, "w", encoding="utf-8") as f:
+                json.dump(old, f)
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, path, 0, winreg.KEY_SET_VALUE) as key:
+            winreg.SetValueEx(key, "ProxyEnable", 0, winreg.REG_DWORD, 1)
+            winreg.SetValueEx(key, "ProxyServer", 0, winreg.REG_SZ, SYSTEM_PROXY)
+            winreg.SetValueEx(key, "ProxyOverride", 0, winreg.REG_SZ, SYSTEM_BYPASS)
+            try:
+                winreg.DeleteValue(key, "AutoConfigURL")
+            except FileNotFoundError:
+                pass
+        _notify_proxy_change()
+        return True
+    except OSError:
+        return False
+
+
+def disable_system_proxy():
+    if winreg is None:
+        return False
+    path = r"Software\Microsoft\Windows\CurrentVersion\Internet Settings"
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, path, 0, winreg.KEY_SET_VALUE) as key:
+            winreg.SetValueEx(key, "ProxyEnable", 0, winreg.REG_DWORD, 0)
+            if os.path.exists(PROXY_BACKUP):
+                with open(PROXY_BACKUP, "r", encoding="utf-8") as f:
+                    old = json.load(f)
+                for name, reg_type in (
+                    ("ProxyServer", winreg.REG_SZ),
+                    ("ProxyOverride", winreg.REG_SZ),
+                    ("AutoConfigURL", winreg.REG_SZ),
+                ):
+                    val = old.get(name)
+                    if val:
+                        winreg.SetValueEx(key, name, 0, reg_type, val)
+                    else:
+                        try:
+                            winreg.DeleteValue(key, name)
+                        except FileNotFoundError:
+                            pass
+                if old.get("ProxyEnable") is not None:
+                    winreg.SetValueEx(
+                        key, "ProxyEnable", 0, winreg.REG_DWORD, int(old["ProxyEnable"])
+                    )
+                os.remove(PROXY_BACKUP)
+        _notify_proxy_change()
+        return True
+    except OSError:
+        return False
+
+
+def site_ok(timeout=15):
+    op = urllib.request.build_opener(
+        urllib.request.ProxyHandler({"http": PROXY, "https": PROXY})
+    )
+    req = urllib.request.Request(
+        SITE_URL,
+        headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36"},
+    )
+    try:
+        with op.open(req, timeout=timeout) as r:
+            return 200 <= r.status < 400
+    except urllib.error.HTTPError as e:
+        return 200 <= e.code < 400
+    except Exception:
+        return False
+
+
+def saved_last_node():
+    try:
+        with open(LAST_NODE, "r", encoding="utf-8") as f:
+            return f.read().strip() or None
+    except OSError:
+        return None
+
+
+def save_last_node(name):
+    try:
+        with open(LAST_NODE, "w", encoding="utf-8") as f:
+            f.write(name)
+    except OSError:
+        pass
 
 
 def get_ip(timeout=12):
@@ -208,7 +349,9 @@ class App:
         self.btn_off = mkbtn(bwrap, "■   TẮT (IP THƯỜNG)", RED, self.turn_off, "#dc2626")
         self.btn_off.pack(fill="x", pady=(0, 8))
         self.btn_check = mkbtn(bwrap, "⟳   KIỂM TRA IP", BLUE, self.refresh_status, "#2563eb")
-        self.btn_check.pack(fill="x")
+        self.btn_check.pack(fill="x", pady=(0, 8))
+        self.btn_site = mkbtn(bwrap, "🌐   MỞ YES.SKBROADBAND", "#0284c7", self.open_site, "#0369a1")
+        self.btn_site.pack(fill="x")
 
         # node card
         ncard = tk.Frame(outer, bg=CARD, highlightbackground="#334155",
@@ -291,6 +434,7 @@ class App:
             done(res)
 
     def _show_ip(self, ip, now):
+        proxy_state = "BẬT" if system_proxy_on() else "TẮT"
         if ip:
             country = ip.get("country", "?")
             color = GREEN if country == "KR" else RED
@@ -299,11 +443,15 @@ class App:
                 fg=color,
             )
             self.lbl_meta.config(
-                text="ISP: {}\nnode: {}".format(ip.get("org", ""), now)
+                text="ISP: {}\nnode: {}\nproxy hệ thống: {}".format(
+                    ip.get("org", ""), now, proxy_state
+                )
             )
         else:
             self.lbl_ip.config(text="IP:  không kiểm tra được", fg=AMBER)
-            self.lbl_meta.config(text="node: {}".format(now))
+            self.lbl_meta.config(
+                text="node: {}\nproxy hệ thống: {}".format(now, proxy_state)
+            )
 
     def refresh_status(self, silent=False):
         self._set_status("Đang kiểm tra IP...")
@@ -333,6 +481,9 @@ class App:
             self._show_ip(ip, now)
             if ip and ip.get("country") == "KR":
                 self.state_on = True
+                if not system_proxy_on() and enable_system_proxy():
+                    self.log("Đã bật lại proxy hệ thống → " + SYSTEM_PROXY)
+                    self._show_ip(ip, now)
                 self._set_status("Đang bật IP Hàn ✓ (mode: {})".format(mode))
             elif self.state_on and self.auto_var.get():
                 if not silent:
@@ -353,40 +504,64 @@ class App:
             nodes = list_kr_nodes()
             if not nodes:
                 raise RuntimeError("Hết node Hàn trong subscription")
-            random.shuffle(nodes)
-            limit = nodes[:30]
+            last = saved_last_node()
+            if last in nodes:
+                nodes.remove(last)
+                nodes.insert(0, last)
+            rest = [n for n in nodes if n != last]
+            random.shuffle(rest)
+            limit = ([last] if last in nodes else []) + rest
+            first_kr = None
             for i, n in enumerate(limit, 1):
                 self.root.after(0, lambda i=i: self._set_prog(i, len(limit)))
                 self.root.after(
                     0, lambda i=i: self._set_status("Đang thử node {}/{}...".format(i, len(limit)))
                 )
-                d = test_delay(n)
-                if d:
-                    self.root.after(0, lambda d=d: self._set_status("Node OK ({}ms) — kết nối...".format(d)))
-                    set_mode("global")
-                    select_global(n)
-                    time.sleep(0.3)
-                    try:
-                        ip = get_ip(timeout=10)
-                    except Exception:
-                        ip = None
-                    return n, d, ip
+                d = test_delay(n, timeout=4)
+                if not d:
+                    continue
+                self.root.after(0, lambda d=d: self._set_status("Node OK ({}ms) — kiểm tra IP...".format(d)))
+                set_mode("global")
+                select_global(n)
+                time.sleep(0.3)
+                try:
+                    ip = get_ip(timeout=8)
+                except Exception:
+                    ip = None
+                if not ip or ip.get("country") != "KR":
+                    continue
+                self.root.after(0, lambda n=n: self._set_status("IP Hàn OK — kiểm tra website..."))
+                if site_ok(timeout=15):
+                    return n, d, ip, True
+                if first_kr is None:
+                    first_kr = (n, d, ip)
+            if first_kr is not None:
+                n, d, ip = first_kr
+                set_mode("global")
+                select_global(n)
+                time.sleep(0.3)
+                return n, d, ip, False
             raise RuntimeError("Không node Hàn nào chạy được")
 
         def done(res):
-            n, d, ip = res
+            n, d, ip, site = res
             self.state_on = True
             self.cmb.set(n)
-            if ip and ip.get("country") == "KR":
-                self.log(
-                    "BẬT OK ✓ {} ({}ms) → IP {} {}, Hàn Quốc".format(
-                        n, d, ip.get("ip"), ip.get("city", "")
-                    )
+            save_last_node(n)
+            self.log(
+                "BẬT OK ✓ {} ({}ms) → IP {} {}, Hàn Quốc".format(
+                    n, d, ip.get("ip"), ip.get("city", "")
                 )
-                self._set_status("ĐANG BẬT IP HÀN ✓")
+            )
+            if site:
+                self.log("yes.skbroadband.com: truy cập được ✓")
             else:
-                self.log("Đã chọn {} ({}ms), IP chưa phải Hàn".format(n, d))
-                self._set_status("Đã chọn node nhưng IP chưa phải Hàn")
+                self.log("Cảnh báo: chưa mở được yes.skbroadband.com bằng node này")
+            if enable_system_proxy():
+                self.log("Proxy hệ thống → {} (trình duyệt giờ đi qua Hàn)".format(SYSTEM_PROXY))
+            else:
+                self.log("Không bật được proxy hệ thống — kiểm tra quyền registry")
+            self._set_status("ĐANG BẬT IP HÀN ✓" if site else "IP Hàn OK — website chưa chắc mở được")
             self._show_ip(ip, n)
 
         self.async_task(work, done)
@@ -408,6 +583,8 @@ class App:
 
         def done(ip):
             self.state_on = False
+            if disable_system_proxy():
+                self.log("Đã trả proxy hệ thống về như cũ")
             self._show_ip(ip, "DIRECT (tắt)")
             self.log(
                 "Đã tắt. IP hiện tại: "
@@ -443,12 +620,27 @@ class App:
 
         def done(res):
             d, ip = res
-            self.state_on = True
-            self.log("Đã chọn node ({}ms)".format(d))
+            if ip and ip.get("country") == "KR":
+                self.state_on = True
+                save_last_node(node)
+                enable_system_proxy()
+                self.log("Đã chọn node ({}ms) → IP Hàn, proxy hệ thống BẬT".format(d))
+                self._set_status("Đã chuyển node ✓ ({}ms)".format(d))
+            else:
+                self.state_on = False
+                self.log("Đã chọn node ({}ms) nhưng IP không phải Hàn".format(d))
+                self._set_status("Node này không cho IP Hàn")
             self._show_ip(ip, node)
-            self._set_status("Đã chuyển node ✓ ({}ms)".format(d))
 
         self.async_task(work, done)
+
+    def open_site(self):
+        if not self.state_on or not system_proxy_on():
+            self.log("Cần bật IP Hàn trước (proxy hệ thống chưa bật)")
+            self._set_status("Hãy bấm BẬT IP HÀN trước")
+            return
+        webbrowser.open(SITE_URL)
+        self.log("Đã mở " + SITE_URL)
 
     def refresh_nodes(self):
         def work():

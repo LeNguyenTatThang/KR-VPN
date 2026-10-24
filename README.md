@@ -11,8 +11,10 @@ Tác giả: **Le Nguyen Tat Thang**
 ## Tính năng
 
 - **BẬT IP HÀN** — tự khởi động core, test độ trễ các node Hàn, chọn node sống nhất rồi bật IP Hàn
-- **TẮT** — chuyển về IP thường (DIRECT), core vẫn chạy sẵn để bật lại nhanh
+- **TẮT** — chuyển về IP thường (DIRECT) và trả proxy hệ thống về như cũ, core vẫn chạy sẵn để bật lại nhanh
+- **Tự bật proxy hệ thống Windows** (`127.0.0.1:7890`) khi bật IP Hàn — Chrome/Edge/Cốc Cốc và app dùng proxy hệ thống sẽ ra IP Hàn ngay, không cần chỉnh tay
 - **KIỂM TRA IP** — hiển thị IP / thành phố / quốc gia / ISP hiện tại (ipinfo.io, api.ip.sb, ip-api.com)
+- **MỞ YES.SKBROADBAND** — mở thẳng `https://yes.skbroadband.com/` sau khi đã bật IP Hàn
 - **Chọn node thủ công** — dropdown danh sách node Hàn + nút `Dùng`
 - **Tự đổi node khi node chết** (mặc định bật) — kiểm tra mỗi 30 giây, mất IP Hàn là tự tìm node khác
 - Nhật ký sự kiện ngay trên giao diện
@@ -66,13 +68,14 @@ python kr_vpn.py --selftest
 
 ## Cách dùng
 
-1. Bấm **▶ BẬT IP HÀN** — chờ thanh tiến trình chạy qua các node
+1. Bấm **▶ BẬT IP HÀN** — app tự thử node, kiểm tra IP Hàn và mở được `yes.skbroadband.com`, rồi **tự bật proxy hệ thống Windows**
 2. Ô IP chuyển sang **xanh** + ghi `KR` là thành công
-3. Muốn đổi node: chọn trong dropdown → bấm **Dùng**
-4. Bật/tick ô **Tự đổi node khi node chết** nếu muốn giữ IP Hàn suốt
-5. Bấm **■ TẮT (IP THƯỜNG)** để trở về IP thật
+3. Bấm **🌐 MỞ YES.SKBROADBAND** để vào site (hoặc mở trình duyệt bình thường)
+4. Muốn đổi node: chọn trong dropdown → bấm **Dùng**
+5. Bật/tick ô **Tự đổi node khi node chết** nếu muốn giữ IP Hàn suốt
+6. Bấm **■ TẮT (IP THƯỜNG)** để trở về IP thật và trả proxy hệ thống về như cũ
 
-Sau khi bật, mở trình duyệt (đi qua proxy `127.0.0.1:7890`) hay app bất kỳ đều ra IP Hàn.
+Sau khi bật, Chrome / Edge / Cốc Cốc và mọi app dùng proxy hệ thống đều ra IP Hàn. Firefox mặc định dùng proxy riêng — vào Settings → Network Settings → chọn **Use system proxy settings** (hoặc cài extension proxy trỏ `127.0.0.1:7890`).
 
 ---
 
@@ -141,6 +144,8 @@ Node free đổi rất nhanh. Khi node chết hàng loạt:
 | `Không khởi động được VPN core` | Kiểm tra file `mihomo-windows-amd64-compatible.exe` còn nằm cùng thư mục với `kr_vpn.py` không; tắt antivirus đang chặn |
 | `Hết node Hàn trong subscription` / `Không node Hàn nào chạy được` | Node free đã chết — thay `config.yaml` bằng subscription mới (xem mục Đổi danh sách node) |
 | Đã chọn node nhưng IP chưa phải Hàn | Bấm **KIỂM TRA IP** lại; nếu vẫn sai, tick **Tự đổi node** rồi bấm **BẬT IP HÀN** |
+| Check IP trên web vẫn ra Việt Nam | App đã tự bật proxy hệ thống; kiểm tra Windows **Settings → Network & Internet → Proxy** thấy `127.0.0.1:7890`. Mở tab mới hoặc khởi động lại trình duyệt. Firefox phải chọn **Use system proxy settings**. App nào tự bỏ qua proxy hệ thống thì phải cấu hình proxy thủ công |
+| `yes.skbroadband.com` báo lỗi/không mở | Site chỉ cho IP Hàn. Bấm **KIỂM TRA IP** chắc chắn ra `KR`, rồi bấm **🌐 MỞ YES.SKBROADBAND**. Nếu vẫn lỗi, bấm **BẬT IP HÀN** để app đổi node khác |
 | Firewall/antivirus chặn | Cho phép `mihomo-windows-amd64-compatible.exe` và `pythonw.exe` qua firewall |
 | Port 7890 / 9090 bị chiếm | Đổi `port` và `external-controller` trong `config.yaml` |
 

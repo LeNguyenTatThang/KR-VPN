@@ -4,3 +4,5 @@ __pycache__/
 # runtime
 cache.db
 *.log
+.proxy_backup.json
+.last_node.txt
